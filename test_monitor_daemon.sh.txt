@@ -1,0 +1,36 @@
+#!/bin/bash
+
+PROCESS_NAME="test"
+LOG_FILE="/var/log/monitoring.log"
+MONITOR_URL="https://test.com/monitoring/test/api"
+PID_FILE="/var/run/test_monitor.pid"
+
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
+
+while true; do
+    current_pid=$(pgrep -xo "$PROCESS_NAME")
+
+    if [ -n "$current_pid" ]; then
+        if [ -f "$PID_FILE" ]; then
+            prev_pid=$(cat "$PID_FILE")
+        else
+            prev_pid=""
+        fi
+
+        if [ "$current_pid" != "$prev_pid" ] && [ -n "$prev_pid" ]; then
+            echo "$(date "+%Y-%m-%d %H:%M:%S") - Process '$PROCESS_NAME' restarted (old PID: $prev_pid, new PID: $current_pid)" >> "$LOG_FILE"
+        fi
+
+        echo "$current_pid" > "$PID_FILE"
+
+        if ! curl -sk --max-time 5 --head "$MONITOR_URL" | grep -q "HTTP/"; then
+            echo "$(date "+%Y-%m-%d %H:%M:%S") - Monitoring server unavailable at $MONITOR_URL" >> "$LOG_FILE"
+        fi
+
+    else
+        [ -f "$PID_FILE" ] && rm -f "$PID_FILE"
+    fi
+
+    sleep 60
+done
